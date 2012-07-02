@@ -55,48 +55,27 @@ moveMarbles ((listOfPots, landedInStore), marblesInHand, mustContinue) startingP
  - TODO: there must be a better way than having four near identical loops.
  -}
 moveOneLap :: [Pot] -> Int -> Int -> (([Pot], Bool), Int, Bool)
-moveOneLap listOfPots startingPot startingMarblesInHand = ((modifiedPots, landedInStore), marblesLeftInHand, mustDoAnotherLap) where
-    modifiedPots       = untouchedFirstPots ++ moveLoop toTraverse startingMarblesInHand
-    landedInStore      = storeLoop toTraverse startingMarblesInHand
-    marblesLeftInHand  = marbleLoop toTraverse startingMarblesInHand
-    mustDoAnotherLap   = continuationLoop toTraverse startingMarblesInHand
-    untouchedFirstPots = take (startingPot - 1) listOfPots
-    toTraverse         = drop (startingPot - 1) listOfPots
+moveOneLap listOfPots startingPot startingMarblesInHand = ((modifiedPots, landedInStore), marblesLeftInHand, mustDoAnotherLap)
+  where
+    (untouchedFirstPots, toTraverse)
+      = splitAt (startingPot - 1) listOfPots
+    (newPots, marblesLeftInHand, mustDoAnotherLap, landedInStore)
+      = moveLoop toTraverse startingMarblesInHand []
+    modifiedPots
+      = untouchedFirstPots ++ newPots
 
-    moveLoop [] _ = []
-    moveLoop (x:xs) marblesInHand
-        | marblesInHand == 0                         = returnEmptyPot x : moveLoop xs (marbleCount x)
-        | marblesInHand > 1                          = returnPotWithOneMoreMarble x : moveLoop xs (marblesInHand - 1)
-        | isStore x && marblesInHand == 1            = returnPotWithOneMoreMarble x : xs
-        | (not $ isPotEmpty x) && marblesInHand == 1 = returnEmptyPot x : moveLoop xs (marbleCount x + 1)
-        | isPotEmpty x && marblesInHand == 1         = returnPotWithOneMoreMarble x : xs
+    moveLoop []     marblesInHand xs' = ([],           marblesInHand, True, False)
+    moveLoop (x:xs) marblesInHand xs'
+        | marblesInHand == 0          = moveLoop xs (marbleCount x)     (emptyPot  : xs')
+        | marblesInHand >  1          = moveLoop xs (marblesInHand - 1) (addMarble : xs')
+        | marblesInHand /= 1          = error "strange - marblesInHand was negative?"
+        | isStore x                   = (finishedPots, 0,             False, True)
+        | isPotEmpty x                = (finishedPots, 0,             False, False)
+        | otherwise                   = moveLoop xs (marbleCount x + 1) (emptyPot  : xs')
         where
-            returnPotWithOneMoreMarble pot = pot { marbleCount = (marbleCount pot + 1) }
-            returnEmptyPot pot             = pot { marbleCount = 0 }
-
-    marbleLoop [] marblesInHand = marblesInHand
-    marbleLoop (x:xs) marblesInHand
-        | marblesInHand == 0                         = marbleLoop xs (marbleCount x)
-        | marblesInHand > 1                          = marbleLoop xs (marblesInHand - 1)
-        | isStore x && marblesInHand == 1            = 0
-        | (not $ isPotEmpty x) && marblesInHand == 1 = marbleLoop xs (marbleCount x + 1)
-        | isPotEmpty x && marblesInHand == 1         = 0
-
-    continuationLoop [] _ = True
-    continuationLoop (x:xs) marblesInHand
-        | marblesInHand == 0                         = continuationLoop xs (marbleCount x)
-        | marblesInHand > 1                          = continuationLoop xs (marblesInHand - 1)
-        | isStore x && marblesInHand == 1            = False
-        | (not $ isPotEmpty x) && marblesInHand == 1 = continuationLoop xs (marbleCount x + 1)
-        | isPotEmpty x && marblesInHand == 1         = False
-
-    storeLoop [] _ = False
-    storeLoop (x:xs) marblesInHand
-        | marblesInHand == 0                         = storeLoop xs (marbleCount x)
-        | marblesInHand > 1                          = storeLoop xs (marblesInHand - 1)
-        | isStore x && marblesInHand == 1            = True
-        | (not $ isPotEmpty x) && marblesInHand == 1 = storeLoop xs (marbleCount x + 1)
-        | isPotEmpty x && marblesInHand == 1         = False
+          addMarble    = x { marbleCount = (marbleCount x + 1) }
+          emptyPot     = x { marbleCount = 0 }
+          finishedPots = reverse (addMarble : xs)
 -- }}}
 
 -- Starting move branching {{{
