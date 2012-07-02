@@ -30,18 +30,23 @@ makeStartingMove listOfPots startingPot
     | startingPot > 6                                       = error "Can't take from the store or opponents pots."
     | startingPot < 1                                       = error "Can't take from a pot before the first one."
     | isPotEmpty $ head $ drop (startingPot - 1) listOfPots = error "Can't start from an empty pot."
-    | otherwise                                             = moveMarbles ((listOfPots, False), 0, True) startingPot
+    | otherwise                                             = moveMarbles listOfPots startingPot 0
+
+
+data LapResult = LapContinue Int
+               | LapLandedInStore
+               | LapDone
 
 {-
  - Determines whether another lap is necessary.
  -}
-moveMarbles :: (([Pot], Bool), Int, Bool) -> Int -> ([Pot], Bool)
-moveMarbles ((listOfPots, landedInStore), marblesInHand, mustContinue) startingPot = resultingPotsAndStoreState where
-    resultingPotsAndStoreState = lapLoop listOfPots landedInStore marblesInHand mustContinue startingPot
-
-    lapLoop listOfPots landedInStoreLastLap marblesLeftFromLastLap mustContinue startingPot
-        | not $ mustContinue = (listOfPots, landedInStoreLastLap)
-        | otherwise          = moveMarbles (moveOneLap listOfPots startingPot marblesLeftFromLastLap) 0
+moveMarbles :: [Pot] -> Int -> Int -> ([Pot], Bool)
+moveMarbles listOfPots startingPot marblesInHand =
+  let (newPots, lapResult) = moveOneLap listOfPots startingPot marblesInHand in
+  case lapResult of
+    LapContinue newMarblesInHand -> moveMarbles newPots 0 newMarblesInHand
+    LapLandedInStore             -> (newPots, True)
+    LapDone                      -> (newPots, False)
 
 {-
  - Does the actual movement of marbles.
@@ -54,23 +59,23 @@ moveMarbles ((listOfPots, landedInStore), marblesInHand, mustContinue) startingP
  -
  - TODO: there must be a better way than having four near identical loops.
  -}
-moveOneLap :: [Pot] -> Int -> Int -> (([Pot], Bool), Int, Bool)
-moveOneLap listOfPots startingPot startingMarblesInHand = ((modifiedPots, landedInStore), marblesLeftInHand, mustDoAnotherLap)
+moveOneLap :: [Pot] -> Int -> Int -> ([Pot], LapResult)
+moveOneLap listOfPots startingPot startingMarblesInHand = (modifiedPots, lapResult)
   where
     (untouchedFirstPots, toTraverse)
       = splitAt (startingPot - 1) listOfPots
-    (newPots, marblesLeftInHand, mustDoAnotherLap, landedInStore)
+    (newPots, lapResult)
       = moveLoop toTraverse startingMarblesInHand []
     modifiedPots
       = untouchedFirstPots ++ newPots
 
-    moveLoop []     marblesInHand xs' = ([],           marblesInHand, True, False)
+    moveLoop []     marblesInHand xs' = ([],           LapContinue marblesInHand)
     moveLoop (x:xs) marblesInHand xs'
         | marblesInHand == 0          = moveLoop xs (marbleCount x)     (emptyPot  : xs')
         | marblesInHand >  1          = moveLoop xs (marblesInHand - 1) (addMarble : xs')
         | marblesInHand /= 1          = error "strange - marblesInHand was negative?"
-        | isStore x                   = (finishedPots, 0,             False, True)
-        | isPotEmpty x                = (finishedPots, 0,             False, False)
+        | isStore x                   = (finishedPots, LapLandedInStore)
+        | isPotEmpty x                = (finishedPots, LapDone)
         | otherwise                   = moveLoop xs (marbleCount x + 1) (emptyPot  : xs')
         where
           addMarble    = x { marbleCount = (marbleCount x + 1) }
